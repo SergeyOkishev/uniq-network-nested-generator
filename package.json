@@ -1,0 +1,21 @@
+{
+  "name": "nested-collection-generator",
+  "version": "1.0.0",
+  "description": "",
+  "main": "index.js",
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "author": "",
+  "license": "ISC",
+  "devDependencies": {
+    "typescript": "^4.7.4"
+  },
+  "dependencies": {
+    "@unique-nft/accounts": "^0.2.2",
+    "@unique-nft/sdk": "0.4.33",
+    "axios": "^0.27.2",
+    "canvas": "^2.9.3",
+    "ipfs-http-client": "^53.0.1"
+  }
+}
