@@ -1,10 +1,10 @@
-import { Sdk } from "@unique-nft/sdk";
-import "@unique-nft/sdk/tokens";
+import { Sdk } from "@unique-nft/substrate-client";
+import "@unique-nft/substrate-client/tokens";
 import {
   TokenByIdResult,
   TokenChildrenArguments,
   TokenChildrenResult,
-} from "@unique-nft/sdk/tokens";
+} from "@unique-nft/substrate-client/tokens";
 import env from "./env.json";
 import MyClient from "./MyClient";
 
@@ -84,10 +84,15 @@ async function getBundleFn(this: Sdk, args: any): Promise<NestedToken> {
   console.log("Started", env);
   await MyClient.init();
   console.log("connected");
-  console.time("magic");
+  console.time("magic1");
+  // const res = await MyClient.sdk.collections.get_new({ collectionId: 756 });
+  // const res = await MyClient.sdk.tokens.get_new({ collectionId: 883, tokenId: 4 });
   const res = await MyClient.magic(5, 5);
+  // const res = ((await MyClient.sdk.api.query.system.account('5FNTBngp5E57ti1RYz7taHMChiqMvK2rQrSidH8nWwp1ALKW')) as any).nonce.toNumber()
   // const res = await MyClient.sdk.collections.get_new({ collectionId: 735 });
-  console.timeEnd("magic");
+  // const res = await MyClient.sdk.tokens.getBundle({ collectionId: 735, tokenId: 456 });
   console.dir(res, { depth: 5 });
+  console.log('-------------------------')
+  console.timeEnd("magic1");
   console.log("Done");
 })();

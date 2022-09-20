@@ -35,7 +35,7 @@ const nestedConfig = {
 } as Config;
 
 // TODO: env
-const uploadUrl = "https://rest.dev.uniquenetwork.dev/ipfs/upload-file";
+const uploadUrl = "https://rest.dev.uniquenetwork.dev/v1/ipfs/upload-file";
 
 class ImageGenerator {
   // prefix - parent.name

@@ -1,11 +1,12 @@
 import { SdkSigner, SignatureType } from "@unique-nft/accounts";
 import { KeyringProvider } from "@unique-nft/accounts/keyring";
-import { Sdk } from "@unique-nft/sdk";
+import { Sdk } from "@unique-nft/substrate-client";
 import {
   AttributeType,
   COLLECTION_SCHEMA_NAME,
   TokenIdArguments,
-} from "@unique-nft/sdk/tokens";
+} from "@unique-nft/substrate-client/tokens";
+import { TxBuildArguments } from "@unique-nft/substrate-client/types";
 import env from "./env.json";
 import ImageGenerator from "./ImageGenerator";
 
@@ -15,6 +16,35 @@ const network = env.network;
 // TODO: to config
 const IPFSGateway = "https://ipfs.uniquenetwork.dev/ipfs";
 const ipfsCid = "QmPVMVzh8yTERPVsGpnzh4XxXQfDMF7sdjxGPo1WFnJRyW";
+
+async function createCachedNonceBuild(this: Sdk, signerAddress: string) {
+  // TODO:
+  // 1. Remove logs
+  // 2. Allow passing "ignore nonces" here
+  // 3. Add to Marketplace-api
+  let nonce = -1;
+  const originalSdkBuild = this.extrinsics.build.bind({ sdk: this });
+
+  const resetNonce = async() => {
+    nonce = (await this.api.query.system.account(signerAddress) as any).nonce.toNumber();
+    console.log('Reseted to:', nonce);
+  }
+
+  await resetNonce();
+
+  const fn = async (buildArgs: TxBuildArguments) => {
+    // allow override for nonce if passed directly from args. Very dangerouse.
+    if (buildArgs.nonce) nonce = buildArgs.nonce;
+    const args = { ...buildArgs, nonce };
+    const res = originalSdkBuild(args);
+    console.log('Nonce used: ', nonce);
+    if (buildArgs.nonce === -1) await resetNonce();// operation finished with "-1" - this will provide us with next possible nonce to use
+    else nonce = nonce + 1; // otherwise increment the last used nonce (whether it was passed or used from cache)
+    return await res;
+  }
+
+  return fn;
+}
 
 class MyClient {
   // @ts-ignore || trust me, I'm engineer and it will be initialized after "init" call
@@ -27,10 +57,13 @@ class MyClient {
   collectionId?: number;
   address: string; // no idea why, but it's mandatory to provide
 
+  nonce: number;
+
   constructor(seed: string) {
     this.seed = seed;
-    this.collectionId = 733;
+    this.collectionId = 735;
     this.address = "5FNTBngp5E57ti1RYz7taHMChiqMvK2rQrSidH8nWwp1ALKW";
+    this.nonce = -1;
   }
 
   async init() {
@@ -43,6 +76,15 @@ class MyClient {
     this.signer = keyringProvider.addSeed(this.seed).getSigner();
 
     this.sdk = await Sdk.create({ chainWsUrl: network, signer: this.signer });
+
+    this.sdk.extrinsics.build = await createCachedNonceBuild.bind(this.sdk)(this.address);
+
+    // console.log('nonce Andrei', this.nonce, 'nonce SDK', await (await this.sdk.api.rpc.system.accountNextIndex(this.address)).toNumber())
+  }
+
+  getNonce() {
+    this.nonce = this.nonce + 1;
+    return this.nonce;
   }
 
   async createCollection(
@@ -115,7 +157,7 @@ class MyClient {
       "1": { _: depth.toString() },
       "2": { _: index.toString() },
     };
-    const image = await ImageGenerator.generateImage(depth, index, prefix);
+    const image = await ImageGenerator.generateImage(depth, index, isFirst ? name : prefix);
     const createArgs = {
       owner: this.address,
       address: this.address,
@@ -125,9 +167,9 @@ class MyClient {
         image: {
           ipfsCid: image.cid,
         },
-      },
+      }
     };
-    const createResult = await this.sdk.tokens.create_new.submitWaitResult(
+    const createResult = await this.sdk.tokens.create.submitWaitResult(
       createArgs
     );
     return createResult.parsed;
@@ -155,7 +197,7 @@ class MyClient {
   ) {
     const currentDepth = parent.depth + 1;
     if (currentDepth > maxDepth) return;
-    // let backgroundPromises = [];
+    let backgroundPromises = [];
     for (let i = 0; i < tokensPerLevel; i++) {
       const createTokenPromise = this.createToken(currentDepth, i, parent.prefix);
       const bgPromise = new Promise(async (resolve, reject) => {
@@ -163,16 +205,23 @@ class MyClient {
         console.log('Token created: ', createdToken.tokenId);
         await this.nestToken(parent.tokenId, createdToken.tokenId);
         console.log('Token nested: ', createdToken.tokenId);
-        await this.createNestedTokens({ ...createdToken, depth: currentDepth, index: i, prefix: `${parent.prefix}-${i + 1}`}, tokensPerLevel, maxDepth);
+        await this.createNestedTokens({ 
+          ...createdToken, 
+          depth: currentDepth, 
+          index: i, 
+          prefix: `${parent.prefix}-${i + 1}`}, 
+          tokensPerLevel, 
+          maxDepth,
+          );
         console.log('Finished creating childs for: ', createdToken.tokenId);
         resolve(true);
       });
-      // backgroundPromises.push(bgPromise);
+      backgroundPromises.push(bgPromise);
       // Priority is too low screws us here
       // Theoretically - we can use mint many instead
-      await bgPromise;
+      // await bgPromise;
     }
-    // await Promise.all(backgroundPromises);
+    await Promise.all(backgroundPromises);
   }
 
   async magic(tokensPerLevel: number = 5, maxDepth: number = 5) {
@@ -184,6 +233,7 @@ class MyClient {
       index = 0,
       prefix = "S";
     const topmostParent = await this.createToken(depth, index, prefix, true);
+    console.log('TOPMOST PARENT ID: ', topmostParent.tokenId);
     await this.createNestedTokens(
       {
         ...topmostParent,
@@ -194,7 +244,7 @@ class MyClient {
       tokensPerLevel,
       maxDepth
     );
-    console.log('Completed');
+    console.log('Completed: ', topmostParent.tokenId);
     console.log(Date.now());
     console.log(`Time elapsed: `, console.timeEnd('magic'));
   }
