@@ -15,37 +15,8 @@ const network = env.network;
 
 // TODO: to config
 const IPFSGateway = "https://ipfs.uniquenetwork.dev/ipfs";
-const ipfsCid = "QmPVMVzh8yTERPVsGpnzh4XxXQfDMF7sdjxGPo1WFnJRyW";
-
-async function createCachedNonceBuild(this: Sdk, signerAddress: string) {
-  // TODO:
-  // 1. Remove logs
-  // 2. Allow passing "ignore nonces" here
-  // 3. Add to Marketplace-api
-  let nonce = -1;
-  const originalSdkBuild = this.extrinsics.build.bind({ sdk: this });
-
-  const resetNonce = async() => {
-    nonce = (await this.api.query.system.account(signerAddress) as any).nonce.toNumber();
-    console.log('Reseted to:', nonce);
-  }
-
-  await resetNonce();
-
-  const fn = async (buildArgs: TxBuildArguments) => {
-    // allow override for nonce if passed directly from args. Very dangerouse.
-    if (buildArgs.nonce) nonce = buildArgs.nonce;
-    const args = { ...buildArgs, nonce };
-    const res = originalSdkBuild(args);
-    console.log('Nonce used: ', nonce);
-    if (buildArgs.nonce === -1) await resetNonce();// operation finished with "-1" - this will provide us with next possible nonce to use
-    else nonce = nonce + 1; // otherwise increment the last used nonce (whether it was passed or used from cache)
-    return await res;
-  }
-
-  return fn;
-}
-
+// const ipfsCid = "QmPVMVzh8yTERPVsGpnzh4XxXQfDMF7sdjxGPo1WFnJRyW";
+const ipfsCid = "QmdbTdnAuXTaesy2ZnU4BTJwi3T5V3TFXY7AZvtqmzEg6Y";
 class MyClient {
   // @ts-ignore || trust me, I'm engineer and it will be initialized after "init" call
   public sdk: Sdk;
@@ -61,8 +32,8 @@ class MyClient {
 
   constructor(seed: string) {
     this.seed = seed;
-    this.collectionId = 735;
-    this.address = "5FNTBngp5E57ti1RYz7taHMChiqMvK2rQrSidH8nWwp1ALKW";
+    this.collectionId = -1;
+    this.address = "5FyM6ZTLNKQniseGKUwcqCL9hxoCGka62xV7ouTQ94afdqG5";
     this.nonce = -1;
   }
 
@@ -76,9 +47,7 @@ class MyClient {
     this.signer = keyringProvider.addSeed(this.seed).getSigner();
 
     this.sdk = await Sdk.create({ chainWsUrl: network, signer: this.signer });
-
-    this.sdk.extrinsics.build = await createCachedNonceBuild.bind(this.sdk)(this.address);
-
+    this.collectionId = await this.createCollection("TestNestedCats", "The test collection with nested tokens", "TNC");
     // console.log('nonce Andrei', this.nonce, 'nonce SDK', await (await this.sdk.api.rpc.system.accountNextIndex(this.address)).toNumber())
   }
 
@@ -140,7 +109,9 @@ class MyClient {
     const createResult =
       await this.sdk.collections.creation_new.submitWaitResult(createArgs);
     const { collectionId } = createResult.parsed;
+    console.log('Collection ID:', collectionId);
     return collectionId;
+    
   }
 
   public async createToken(
@@ -197,7 +168,7 @@ class MyClient {
   ) {
     const currentDepth = parent.depth + 1;
     if (currentDepth > maxDepth) return;
-    let backgroundPromises = [];
+    // let backgroundPromises = [];
     for (let i = 0; i < tokensPerLevel; i++) {
       const createTokenPromise = this.createToken(currentDepth, i, parent.prefix);
       const bgPromise = new Promise(async (resolve, reject) => {
@@ -216,19 +187,20 @@ class MyClient {
         console.log('Finished creating childs for: ', createdToken.tokenId);
         resolve(true);
       });
-      backgroundPromises.push(bgPromise);
+      // backgroundPromises.push(bgPromise);
       // Priority is too low screws us here
       // Theoretically - we can use mint many instead
-      // await bgPromise;
+      await bgPromise;
     }
-    await Promise.all(backgroundPromises);
+    // await Promise.all(backgroundPromises);
   }
 
   async magic(tokensPerLevel: number = 5, maxDepth: number = 5) {
     console.log('Begining magic');
     console.log('---------------')
-    console.log(Date.now());
-    console.time('magic')
+    console.log(new Date().toUTCString());
+    // console.time('magic')
+    const begin = Date.now();
     const depth = 0,
       index = 0,
       prefix = "S";
@@ -245,8 +217,10 @@ class MyClient {
       maxDepth
     );
     console.log('Completed: ', topmostParent.tokenId);
-    console.log(Date.now());
-    console.log(`Time elapsed: `, console.timeEnd('magic'));
+    console.log(new Date().toUTCString());
+    const end = Date.now();
+    const timeSpent = (end - begin) / 60000;
+    console.log(`Time elapsed: ${Math.trunc(timeSpent/60)} hour(s) and ${Math.trunc(timeSpent%60)} minute(s)`);
   }
 }
 
