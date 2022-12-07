@@ -2,12 +2,12 @@
 
 ## Nesting and Bundling
 
-Please follow [the link](https://docs.unique.network/concepts/network-features/nesting-bundling.html) to find detailed information regarding Nesting and Bundling. 
+Please follow [the link](https://docs.unique.network/concepts/network-features/nesting-bundling.html) to find the detailed information regarding Nesting and Bundling. 
 
 ## Description
 You can easily create a collection with nested tokens by running this application with appropriate parameters like owner seed, network, required number of tokens and the nesting depth of a bundle. 
 
-To create basic collection follow the steps below.
+To create a basic collection follow the steps below.
 
 ### Step 1: update **env.json**
 In the `env.json` file add the following data:
