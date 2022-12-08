@@ -33,7 +33,7 @@ class MyClient {
   constructor(seed: string) {
     this.seed = seed;
     this.collectionId = -1;
-    this.address = "5FyM6ZTLNKQniseGKUwcqCL9hxoCGka62xV7ouTQ94afdqG5";
+    this.address = "5FNTBngp5E57ti1RYz7taHMChiqMvK2rQrSidH8nWwp1ALKW";
     this.nonce = -1;
   }
 

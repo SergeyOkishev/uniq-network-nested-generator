@@ -23,8 +23,8 @@ In the `MyClient.ts` add the the collection owner address to the constructor.
 
 Optionally you can change name, description and prefix of the collection in `init()` method.
 
-### Step 3: update **index.ts**
-In the `MyClient.ts` you can specify the depth of the created tokens when calling `MyClient.magic` (e.g. (2, 2), (3, 3)).
+### Step 3: update **tokensPerLevel** and **depth** parameters
+In the `index.ts` we pass `tokensPerLevel` and `depth` when calling `MyClient.magic` method to configure the depth of the created bundles (e.g. (2, 2), (3, 3)). You can configure those parameters by updating `tokensPerLevel` and `depth` in `env.json` file. By default both set as 2. 
 
 For example, with (2, 2) depth the following token structure is created.
 
@@ -34,14 +34,14 @@ For example, with (2, 2) depth the following token structure is created.
 **NOTE**: Token creation time depends on the required depth of the bundle. For example, the bundle with depth (2, 2) would be created in 5 minutes while creation (3, 3) bundle would take about 30 minutes. Maximum available depth is 5. 
 
 ### Step 4: npm install
-Execute following commands in the terminal.
+Execute following command in the terminal.
 
 ```
 npm install
 ```
 
 ### Step 5: run the app
-Execute following commands in the terminal.
+Execute following command in the terminal.
 
 ```
 npx ts-node index.ts
