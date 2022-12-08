@@ -1,4 +1,4 @@
-import { SdkSigner, SignatureType } from "@unique-nft/accounts";
+import { Account, SdkSigner, SignatureType } from "@unique-nft/accounts";
 import { KeyringProvider } from "@unique-nft/accounts/keyring";
 import { Sdk } from "@unique-nft/substrate-client";
 import {
@@ -6,6 +6,7 @@ import {
   COLLECTION_SCHEMA_NAME,
   TokenIdArguments,
 } from "@unique-nft/substrate-client/tokens";
+import { KeyringPair } from '@polkadot/keyring/types';
 import { TxBuildArguments } from "@unique-nft/substrate-client/types";
 import env from "./env.json";
 import ImageGenerator from "./ImageGenerator";
@@ -24,28 +25,25 @@ class MyClient {
   seed: string;
   // @ts-ignore || trust me, I'm engineer and it will be initialized after "init" call
   signer: SdkSigner;
-
   collectionId?: number;
-  address: string; // no idea why, but it's mandatory to provide
-
+  address?: string; // no idea why, but it's mandatory to provide
+  account?: Account<KeyringPair>;
   nonce: number;
 
   constructor(seed: string) {
     this.seed = seed;
-    this.collectionId = -1;
-    this.address = "5FNTBngp5E57ti1RYz7taHMChiqMvK2rQrSidH8nWwp1ALKW";
     this.nonce = -1;
   }
 
   async init() {
+    
     const keyringProvider = new KeyringProvider({
       type: SignatureType.Sr25519,
     });
-
     await keyringProvider.init();
-
-    this.signer = keyringProvider.addSeed(this.seed).getSigner();
-
+    this.account = keyringProvider.addSeed(this.seed);
+    this.signer = this.account.getSigner();
+    this.address = this.account.instance.address;
     this.sdk = await Sdk.create({ chainWsUrl: network, signer: this.signer });
     this.collectionId = await this.createCollection("TestNestedCats", "The test collection with nested tokens", "TNC");
     // console.log('nonce Andrei', this.nonce, 'nonce SDK', await (await this.sdk.api.rpc.system.accountNextIndex(this.address)).toNumber())
@@ -98,7 +96,7 @@ class MyClient {
       description,
       tokenPrefix,
       schema: collectionSchema,
-      address: this.address,
+      address: this.address!,
       permissions: {
         nesting: {
           tokenOwner: true,
@@ -130,8 +128,8 @@ class MyClient {
     };
     const image = await ImageGenerator.generateImage(depth, index, isFirst ? name : prefix);
     const createArgs = {
-      owner: this.address,
-      address: this.address,
+      owner: this.address!,
+      address: this.address!,
       collectionId: this.collectionId,
       data: {
         encodedAttributes: attributes,
@@ -148,7 +146,7 @@ class MyClient {
 
   async nestToken(parentId: number, childId: number) {
     const res = await this.sdk.tokens.nest.submitWaitResult({
-      address: this.address,
+      address: this.address!,
       parent: {
         tokenId: parentId,
         collectionId: this.collectionId!,
