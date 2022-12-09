@@ -1,4 +1,4 @@
-import { SdkSigner, SignatureType } from "@unique-nft/accounts";
+import { Account, SdkSigner, SignatureType } from "@unique-nft/accounts";
 import { KeyringProvider } from "@unique-nft/accounts/keyring";
 import { Sdk } from "@unique-nft/substrate-client";
 import {
@@ -6,6 +6,7 @@ import {
   COLLECTION_SCHEMA_NAME,
   TokenIdArguments,
 } from "@unique-nft/substrate-client/tokens";
+import { KeyringPair } from '@polkadot/keyring/types';
 import { TxBuildArguments } from "@unique-nft/substrate-client/types";
 import env from "./env.json";
 import ImageGenerator from "./ImageGenerator";
@@ -15,37 +16,8 @@ const network = env.network;
 
 // TODO: to config
 const IPFSGateway = "https://ipfs.uniquenetwork.dev/ipfs";
-const ipfsCid = "QmPVMVzh8yTERPVsGpnzh4XxXQfDMF7sdjxGPo1WFnJRyW";
-
-async function createCachedNonceBuild(this: Sdk, signerAddress: string) {
-  // TODO:
-  // 1. Remove logs
-  // 2. Allow passing "ignore nonces" here
-  // 3. Add to Marketplace-api
-  let nonce = -1;
-  const originalSdkBuild = this.extrinsics.build.bind({ sdk: this });
-
-  const resetNonce = async() => {
-    nonce = (await this.api.query.system.account(signerAddress) as any).nonce.toNumber();
-    console.log('Reseted to:', nonce);
-  }
-
-  await resetNonce();
-
-  const fn = async (buildArgs: TxBuildArguments) => {
-    // allow override for nonce if passed directly from args. Very dangerouse.
-    if (buildArgs.nonce) nonce = buildArgs.nonce;
-    const args = { ...buildArgs, nonce };
-    const res = originalSdkBuild(args);
-    console.log('Nonce used: ', nonce);
-    if (buildArgs.nonce === -1) await resetNonce();// operation finished with "-1" - this will provide us with next possible nonce to use
-    else nonce = nonce + 1; // otherwise increment the last used nonce (whether it was passed or used from cache)
-    return await res;
-  }
-
-  return fn;
-}
-
+// const ipfsCid = "QmPVMVzh8yTERPVsGpnzh4XxXQfDMF7sdjxGPo1WFnJRyW";
+const ipfsCid = "QmdbTdnAuXTaesy2ZnU4BTJwi3T5V3TFXY7AZvtqmzEg6Y";
 class MyClient {
   // @ts-ignore || trust me, I'm engineer and it will be initialized after "init" call
   public sdk: Sdk;
@@ -53,32 +25,27 @@ class MyClient {
   seed: string;
   // @ts-ignore || trust me, I'm engineer and it will be initialized after "init" call
   signer: SdkSigner;
-
   collectionId?: number;
-  address: string; // no idea why, but it's mandatory to provide
-
+  address?: string; // no idea why, but it's mandatory to provide
+  account?: Account<KeyringPair>;
   nonce: number;
 
   constructor(seed: string) {
     this.seed = seed;
-    this.collectionId = 735;
-    this.address = "5FNTBngp5E57ti1RYz7taHMChiqMvK2rQrSidH8nWwp1ALKW";
     this.nonce = -1;
   }
 
   async init() {
+    
     const keyringProvider = new KeyringProvider({
       type: SignatureType.Sr25519,
     });
-
     await keyringProvider.init();
-
-    this.signer = keyringProvider.addSeed(this.seed).getSigner();
-
+    this.account = keyringProvider.addSeed(this.seed);
+    this.signer = this.account.getSigner();
+    this.address = this.account.instance.address;
     this.sdk = await Sdk.create({ chainWsUrl: network, signer: this.signer });
-
-    this.sdk.extrinsics.build = await createCachedNonceBuild.bind(this.sdk)(this.address);
-
+    this.collectionId = await this.createCollection("TestNestedCats", "The test collection with nested tokens", "TNC");
     // console.log('nonce Andrei', this.nonce, 'nonce SDK', await (await this.sdk.api.rpc.system.accountNextIndex(this.address)).toNumber())
   }
 
@@ -129,7 +96,7 @@ class MyClient {
       description,
       tokenPrefix,
       schema: collectionSchema,
-      address: this.address,
+      address: this.address!,
       permissions: {
         nesting: {
           tokenOwner: true,
@@ -140,7 +107,9 @@ class MyClient {
     const createResult =
       await this.sdk.collections.creation_new.submitWaitResult(createArgs);
     const { collectionId } = createResult.parsed;
+    console.log('Collection ID:', collectionId);
     return collectionId;
+    
   }
 
   public async createToken(
@@ -159,8 +128,8 @@ class MyClient {
     };
     const image = await ImageGenerator.generateImage(depth, index, isFirst ? name : prefix);
     const createArgs = {
-      owner: this.address,
-      address: this.address,
+      owner: this.address!,
+      address: this.address!,
       collectionId: this.collectionId,
       data: {
         encodedAttributes: attributes,
@@ -177,7 +146,7 @@ class MyClient {
 
   async nestToken(parentId: number, childId: number) {
     const res = await this.sdk.tokens.nest.submitWaitResult({
-      address: this.address,
+      address: this.address!,
       parent: {
         tokenId: parentId,
         collectionId: this.collectionId!,
@@ -197,7 +166,7 @@ class MyClient {
   ) {
     const currentDepth = parent.depth + 1;
     if (currentDepth > maxDepth) return;
-    let backgroundPromises = [];
+    // let backgroundPromises = [];
     for (let i = 0; i < tokensPerLevel; i++) {
       const createTokenPromise = this.createToken(currentDepth, i, parent.prefix);
       const bgPromise = new Promise(async (resolve, reject) => {
@@ -216,19 +185,20 @@ class MyClient {
         console.log('Finished creating childs for: ', createdToken.tokenId);
         resolve(true);
       });
-      backgroundPromises.push(bgPromise);
+      // backgroundPromises.push(bgPromise);
       // Priority is too low screws us here
       // Theoretically - we can use mint many instead
-      // await bgPromise;
+      await bgPromise;
     }
-    await Promise.all(backgroundPromises);
+    // await Promise.all(backgroundPromises);
   }
 
   async magic(tokensPerLevel: number = 5, maxDepth: number = 5) {
     console.log('Begining magic');
     console.log('---------------')
-    console.log(Date.now());
-    console.time('magic')
+    console.log(new Date().toUTCString());
+    // console.time('magic')
+    const begin = Date.now();
     const depth = 0,
       index = 0,
       prefix = "S";
@@ -245,8 +215,10 @@ class MyClient {
       maxDepth
     );
     console.log('Completed: ', topmostParent.tokenId);
-    console.log(Date.now());
-    console.log(`Time elapsed: `, console.timeEnd('magic'));
+    console.log(new Date().toUTCString());
+    const end = Date.now();
+    const timeSpent = (end - begin) / 60000;
+    console.log(`Time elapsed: ${Math.trunc(timeSpent/60)} hour(s) and ${Math.trunc(timeSpent%60)} minute(s)`);
   }
 }
 
